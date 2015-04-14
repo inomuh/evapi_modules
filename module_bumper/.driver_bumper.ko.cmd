@@ -1,0 +1,1 @@
+cmd_/home/pi/kernel_modules/module_bumper/driver_bumper.ko := ld -EL -r  -T ./scripts/module-common.lds --build-id  -o /home/pi/kernel_modules/module_bumper/driver_bumper.ko /home/pi/kernel_modules/module_bumper/driver_bumper.o /home/pi/kernel_modules/module_bumper/driver_bumper.mod.o

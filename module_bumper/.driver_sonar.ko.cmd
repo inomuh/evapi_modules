@@ -1,0 +1,1 @@
+cmd_/home/pi/module_sonar/driver_sonar.ko := ld -EL -r  -T ./scripts/module-common.lds --build-id  -o /home/pi/module_sonar/driver_sonar.ko /home/pi/module_sonar/driver_sonar.o /home/pi/module_sonar/driver_sonar.mod.o
