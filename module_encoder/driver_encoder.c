@@ -23,13 +23,19 @@
 #define GPIO_PINB1		22
  
 // text below will be seen in 'cat /proc/interrupt' command
-#define GPIO_PINA0_DESC          "gpio0 interrupt"
-#define GPIO_PINA1_DESC          "gpio1 interrupt"
+#define GPIO_PINA0_DESC          "gpioa0 interrupt"
+#define GPIO_PINA1_DESC          "gpioa1 interrupt"
+
+#define GPIO_PINB0_DESC          "gpiob0 interrupt"
+#define GPIO_PINB1_DESC          "gpiob1 interrupt"
  
 // below is optional, used in more complex code, in our case, this could be
 // NULL
-#define GPIO_PINA0_DEVICE_DESC    "gpio0"
-#define GPIO_PINA1_DEVICE_DESC    "gpio1" 
+#define GPIO_PINA0_DEVICE_DESC    "gpioa0"
+#define GPIO_PINA1_DEVICE_DESC    "gpioa1" 
+
+#define GPIO_PINB0_DEVICE_DESC    "gpiob0"
+#define GPIO_PINB1_DEVICE_DESC    "gpiob1" 
 
 /****************************************************************************/
 /* Driver variables                                                         */
@@ -55,9 +61,12 @@ long durationR = 0, durationL = 0;
 /****************************************************************************/
 /* Interrupts variables block                                               */
 /****************************************************************************/
-short int irq_pin0    = 0;
-short int irq_pin1 	  = 0;
- 
+short int irq_pina0    = 0;
+short int irq_pina1    = 0;
+
+short int irq_pinb0    = 0;
+short int irq_pinb1    = 0;
+
  
 /****************************************************************************/
 /* IRQ handler - fired on interrupt                                         */
@@ -69,16 +78,17 @@ static irqreturn_t r_irq_handler(int irq, void *dev_id, struct pt_regs *regs) {
    // disable hard interrupts (remember them in flag 'flags')
    local_irq_save(flags);
 
-  if(irq == irq_pin0){
+  if(irq == irq_pina0){
 	// GPIO0 Interrupt
 	
 	// Read B1
 	// static inline int gpio_get_value(unsigned int gpio)
-	int val = gpio_get_value(GPIO_PINB0);
+	int b_val = gpio_get_value(GPIO_PINB0);
+	int a_val = gpio_get_value(GPIO_PINA0);
 
-	if(val == 0 && directionL == 1)
+	if((a_val == 1 && b_val == 0) || (a_val == 0 && b_val == 1))
 		directionL =  0;
-	else if(val == 1 && directionL == 0)
+	else if((a_val == 1 && b_val == 1) || (a_val == 0 && b_val == 0))
 		directionL = 1;
 
 	if(directionL == 0)
@@ -87,18 +97,61 @@ static irqreturn_t r_irq_handler(int irq, void *dev_id, struct pt_regs *regs) {
 		durationL--;
 
   }
-  else if(irq == irq_pin1){
+  else if(irq == irq_pina1){
 	// GPIO1 Interrupt
 
         // Read B2
         // static inline int gpio_get_value(unsigned int gpio)
-        int val = gpio_get_value(GPIO_PINB1);
+        int b_val = gpio_get_value(GPIO_PINB1);
+        int a_val = gpio_get_value(GPIO_PINA1);
 
-
-        if(val == 0 && directionR == 1)
+        if((a_val == 1 && b_val == 0) || (a_val == 0 && b_val == 1))
                 directionR =  0;
-        else if(val == 1 && directionR == 0)
+        else if((a_val == 1 && b_val == 1) || (a_val == 0 && b_val == 0))
                 directionR = 1;
+
+
+        if(directionR == 1)
+                durationR++;
+        else
+                durationR--;
+
+
+  }
+  else if(irq == irq_pinb0){
+        // GPIO1 Interrupt
+
+        // Read B2
+        // static inline int gpio_get_value(unsigned int gpio)
+        int b_val = gpio_get_value(GPIO_PINB0);
+        int a_val = gpio_get_value(GPIO_PINA0);
+
+        if((a_val == 1 && b_val == 1) || (a_val == 0 && b_val == 0))
+                directionL =  0;
+        else if((a_val == 0 && b_val == 1) || (a_val == 1 && b_val == 0))
+                directionL = 1;
+
+
+        if(directionL == 0)
+                durationL++;
+        else
+                durationL--;
+
+
+  }
+  else if(irq == irq_pinb1){
+        // GPIO1 Interrupt
+
+        // Read B2
+        // static inline int gpio_get_value(unsigned int gpio)
+        int b_val = gpio_get_value(GPIO_PINB1);
+        int a_val = gpio_get_value(GPIO_PINA1);
+
+        if((a_val == 1 && b_val == 1) || (a_val == 0 && b_val == 0))
+                directionR =  0;
+        else if((a_val == 0 && b_val == 1) || (a_val == 1 && b_val == 0))
+                directionR = 1;
+
 
         if(directionR == 1)
                 durationR++;
@@ -144,7 +197,7 @@ void r_int_config(void) {
       return;
    }
  
-   if ( (irq_pin0 = gpio_to_irq(GPIO_PINA0)) < 0 ) {
+   if ( (irq_pina0 = gpio_to_irq(GPIO_PINA0)) < 0 ) {
       printk("evarobotEncoder: GPIO to IRQ mapping faiure %s\n", GPIO_PINA0_DESC);
       return;
    }
@@ -154,31 +207,78 @@ void r_int_config(void) {
       return;
    }
  
-   if ( (irq_pin1 = gpio_to_irq(GPIO_PINA1)) < 0 ) {
+   if ( (irq_pina1 = gpio_to_irq(GPIO_PINA1)) < 0 ) {
       printk("evarobotEncoder: GPIO to IRQ mapping faiure %s\n", GPIO_PINA1_DESC);
       return;
    }
- 
-   printk(KERN_NOTICE "evarobotEncoder: Mapped int %d\n", irq_pin0);
-   printk(KERN_NOTICE "evarobotEncoder: Mapped int %d\n", irq_pin1); 
 
-   if (request_irq(irq_pin0,
+   if (gpio_request(GPIO_PINB0, GPIO_PINB0_DESC)) {
+      printk("evarobotEncoder: GPIO request faiure: %s\n", GPIO_PINB0_DESC);
+      return;
+   }
+ 
+   if ( (irq_pinb0 = gpio_to_irq(GPIO_PINB0)) < 0 ) {
+      printk("evarobotEncoder: GPIO to IRQ mapping faiure %s\n", GPIO_PINB0_DESC);
+      return;
+   }
+ 
+   if (gpio_request(GPIO_PINB1, GPIO_PINB1_DESC)) {
+      printk("evarobotEncoder: GPIO request faiure: %s\n", GPIO_PINB1_DESC);
+      return;
+   }
+ 
+   if ( (irq_pinb1 = gpio_to_irq(GPIO_PINB1)) < 0 ) {
+      printk("evarobotEncoder: GPIO to IRQ mapping faiure %s\n", GPIO_PINB1_DESC);
+      return;
+   }
+
+
+   printk(KERN_NOTICE "evarobotEncoder: Mapped int %d\n", irq_pina0);
+   printk(KERN_NOTICE "evarobotEncoder: Mapped int %d\n", irq_pina1); 
+
+   printk(KERN_NOTICE "evarobotEncoder: Mapped int %d\n", irq_pinb0);
+   printk(KERN_NOTICE "evarobotEncoder: Mapped int %d\n", irq_pinb1); 
+
+   if (request_irq(irq_pina0,
                    (irq_handler_t ) r_irq_handler,
-                   IRQF_TRIGGER_RISING,
+//                   IRQF_TRIGGER_RISING,
+		   IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
                    GPIO_PINA0_DESC,
                    GPIO_PINA0_DEVICE_DESC)) {
-      printk("evarobotEncoder: Irq Request failure\n");
+      printk("evarobotEncoder: A0 Irq Request failure\n");
       return;
    }
 
-   if (request_irq(irq_pin1,
+   if (request_irq(irq_pina1,
                    (irq_handler_t ) r_irq_handler,
-                   IRQF_TRIGGER_RISING,
+//                   IRQF_TRIGGER_RISING,
+		   IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
                    GPIO_PINA1_DESC,
                    GPIO_PINA1_DEVICE_DESC)) {
-      printk("evarobotEncoder: Irq2 Request failure\n");
+      printk("evarobotEncoder: A1 Irq Request failure\n");
       return;
    }
+
+   if (request_irq(irq_pinb0,
+                   (irq_handler_t ) r_irq_handler,
+//                   IRQF_TRIGGER_RISING,
+		   IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
+                   GPIO_PINB0_DESC,
+                   GPIO_PINB0_DEVICE_DESC)) {
+      printk("evarobotEncoder: B0 Irq Request failure\n");
+      return;
+   }
+
+   if (request_irq(irq_pinb1,
+                   (irq_handler_t ) r_irq_handler,
+//                   IRQF_TRIGGER_RISING,
+		   IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
+                   GPIO_PINB1_DESC,
+                   GPIO_PINB1_DEVICE_DESC)) {
+      printk("evarobotEncoder: B1 Irq Request failure\n");
+      return;
+   }
+
 
  
    return;
@@ -196,10 +296,10 @@ void encoder_init(void){
 
 	// PinB1 as input
 	// static inline int gpio_export(unsigned gpio, bool direction_may_change)
-	gpio_export(GPIO_PINB0, true);
+//	gpio_export(GPIO_PINB0, true);
 
 	// PinB2 as input
-	gpio_export(GPIO_PINB1, true);
+//	gpio_export(GPIO_PINB1, true);
 
 	return;
 }
@@ -211,14 +311,20 @@ void encoder_init(void){
 /****************************************************************************/
 void r_int_release(void) {
  
-   free_irq(irq_pin0, GPIO_PINA0_DEVICE_DESC);
+   free_irq(irq_pina0, GPIO_PINA0_DEVICE_DESC);
    gpio_free(GPIO_PINA0);
 
-   free_irq(irq_pin1, GPIO_PINA1_DEVICE_DESC);
+   free_irq(irq_pina1, GPIO_PINA1_DEVICE_DESC);
    gpio_free(GPIO_PINA1);
    
-   gpio_unexport(GPIO_PINB0);
-   gpio_unexport(GPIO_PINB1);
+   free_irq(irq_pinb0, GPIO_PINB0_DEVICE_DESC);
+   gpio_free(GPIO_PINB0);
+
+   free_irq(irq_pinb1, GPIO_PINB1_DEVICE_DESC);
+   gpio_free(GPIO_PINB1);
+
+//   gpio_unexport(GPIO_PINB0);
+//   gpio_unexport(GPIO_PINB1);
 
  
    return;
