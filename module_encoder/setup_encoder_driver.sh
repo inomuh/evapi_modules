@@ -4,7 +4,7 @@ device="evarobotEncoder"
 
 # invoke insmod with all arguments we got
 # and use a pathname, as newer modutils don't look in .by default
-/sbin/insmod ./$module.ko || exit 1
+#/sbin/insmod ./$module.ko || exit 1
 
 # remove stale nodes
 rm  /dev/${device}

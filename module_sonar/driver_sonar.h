@@ -30,12 +30,15 @@ unsigned int g_u_i_delay = 100*1000;
 // below is optional, used in more complex code, in our case, this could be
 // NULL
 
+//#ifndef DEBUG
+//#define DEBUG
+//#endif
+
 #define MAX_SONAR 7
 
 struct sonar_ioc_transfer 
 {
-	int i_gpio_reflection[MAX_SONAR];
-	int	i_gpio_trigger[MAX_SONAR];
+	int i_gpio_pins[MAX_SONAR];
 	int i_size; 
 
 };
@@ -61,8 +64,7 @@ struct fake_device
 
 
 int g_i_size_of_sonars = 0;
-int g_i_gpio_reflection[MAX_SONAR];
-int g_i_gpio_trigger[MAX_SONAR];
+int g_i_gpio_pins[MAX_SONAR];
 
 int g_i_distance[MAX_SONAR];
 char g_c_gpio_device_desc[MAX_SONAR][8];

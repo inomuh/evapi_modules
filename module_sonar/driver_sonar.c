@@ -48,8 +48,12 @@ static irqreturn_t r_irq_handler(int irq, void *dev_id, struct pt_regs *regs)
    
 	if(i_int_no >= 0)
 	{
-	   pin_val[i_int_no] = gpio_get_value(g_i_gpio_reflection[i_int_no]);
+	   pin_val[i_int_no] = gpio_get_value(g_i_gpio_pins[i_int_no]);
 	   
+	   #ifdef DEBUG
+				printk(KERN_NOTICE "evarobotSonar: pin_val: %d\n", pin_val[i_int_no]);
+			#endif	
+			
 	   if(pre_pin_val[i_int_no] == 0 && pin_val[i_int_no] == 1)
 	   {
 			// Saymaya Başla
@@ -80,14 +84,19 @@ static irqreturn_t r_irq_handler(int irq, void *dev_id, struct pt_regs *regs)
 				g_i_distance[i_int_no] = 0;
 			}
 
-		g_i_new_data[i_int_no] = 1;
+			g_i_new_data[i_int_no] = 1;
 		
-		#ifdef DEBUG
-			printk(KERN_NOTICE "evarobotSonar: Distance[%d](10^4) %d\n", i_int_no, g_i_distance[i_int_no]);
-		#endif
+			#ifdef DEBUG
+				printk(KERN_NOTICE "evarobotSonar: Distance[%d](10^4) %d\n", i_int_no, g_i_distance[i_int_no]);
+			#endif
 	   }
-
-	pre_pin_val[i_int_no] = pin_val[i_int_no];
+//	   else if(pre_pin_val[i_int_no] == 1 && pin_val[i_int_no] == 1)
+//	   {
+//			 	#ifdef DEBUG
+//					printk(KERN_NOTICE "evarobotSonar: pre & pin HIGH\n");
+//				#endif
+//			}
+		pre_pin_val[i_int_no] = pin_val[i_int_no];
 	}
 	else
 	{
@@ -126,9 +135,9 @@ void r_int_release(void)
 	for(i = 0; i < g_i_size_of_sonars; i++)
 	{
 		free_irq(irq_pins[i], g_c_gpio_device_desc[i]);
-		gpio_free(g_i_gpio_reflection[i]);
+		gpio_free(g_i_gpio_pins[i]);
 		
-		gpio_unexport(g_i_gpio_trigger[i]);
+		gpio_unexport(g_i_gpio_pins[i]);
 		//gpio_unexport(g_i_gpio_reflection[i]);
 	}
  
@@ -261,6 +270,7 @@ long device_ioctl(struct file * filp, unsigned int ioctl_num, unsigned long ioct
 	//int m = 0;
 	long ret;
 	int i_free;	
+	unsigned long flags;
 	ret = 0;
 	
 	switch(ioctl_num)
@@ -268,14 +278,7 @@ long device_ioctl(struct file * filp, unsigned int ioctl_num, unsigned long ioct
 		case IOCTL_SET_PARAM:
 		{
 
-			for(i_free = 0; i_free < g_i_size_of_sonars; i_free++)
-			{
-				free_irq(irq_pins[i_free], g_c_gpio_device_desc[i_free]);
-				gpio_free(g_i_gpio_reflection[i_free]);
-				
-				gpio_unexport(g_i_gpio_trigger[i_free]);
-				//gpio_unexport(g_i_gpio_reflection[i]);
-			}
+
 			
 			#ifdef DEBUG
 				printk(KERN_NOTICE "evarobotSonar: Set Param ioctl is called.\n");
@@ -290,28 +293,31 @@ long device_ioctl(struct file * filp, unsigned int ioctl_num, unsigned long ioct
 				return -1;
 			}
 			
+			// Clear pre interrupts
+			for(i_free = 0; i_free < g_i_size_of_sonars; i_free++)
+			{
+				free_irq(irq_pins[i_free], g_c_gpio_device_desc[i_free]);
+				gpio_free(g_i_gpio_pins[i_free]);
+				
+			}
 			
+			// Init interrupts
 			for(i = 0; i < g_i_size_of_sonars; i++)
 			{
-				g_i_gpio_reflection[i] = params->i_gpio_reflection[i];
-				g_i_gpio_trigger[i] = params->i_gpio_trigger[i];
+				g_i_gpio_pins[i] = params->i_gpio_pins[i];
 				
-				gpio_export(g_i_gpio_reflection[i], true);
-				gpio_export(g_i_gpio_trigger[i], true);
-				
-		//		gpio_direction_input(g_i_gpio_reflection[i]);
-		//		gpio_direction_output(g_i_gpio_trigger[i]);
-												
-				sprintf(c_gpio_desc, "GPIO_%d_int", g_i_gpio_reflection[i]);
+				gpio_export(g_i_gpio_pins[i], true);
+														
+				sprintf(c_gpio_desc, "GPIO_%d_int", g_i_gpio_pins[i]);
 				sprintf(g_c_gpio_device_desc[i], "sonar%d", i);
 				
-				if (gpio_request(g_i_gpio_reflection[i], c_gpio_desc)) 
+				if (gpio_request(g_i_gpio_pins[i], c_gpio_desc)) 
 				{
 					printk("evarobotSonar GPIO request faiure: %s\n", c_gpio_desc);
 					return -1;
 				}
 				
-				if ( (irq_pins[i] = gpio_to_irq(g_i_gpio_reflection[i])) < 0 ) 
+				if ( (irq_pins[i] = gpio_to_irq(g_i_gpio_pins[i])) < 0 ) 
  			    {
 					printk("evarobotSonar: GPIO to IRQ mapping faiure %s\n", c_gpio_desc);
 					return -1;
@@ -355,18 +361,19 @@ long device_ioctl(struct file * filp, unsigned int ioctl_num, unsigned long ioct
 				printk(KERN_NOTICE "evarobotSonar: Sonar NO: %d\n", dist_data->i_sonar_no);
 			#endif
 			
-			//gpio_set_value(PIN24, 1L);
-			//for(m=0; m<10; m++)
-			//while(1)
-		//	{
-				gpio_direction_output(g_i_gpio_trigger[dist_data->i_sonar_no], 1);
-				sleep_until(&g_ts, g_u_i_delay);
-				gpio_direction_output(g_i_gpio_trigger[dist_data->i_sonar_no], 0);
-				//gpio_set_value(g_i_gpio_trigger[dist_data->i_sonar_no], 0);
-				sleep_until(&g_ts, g_u_i_delay);
-				
-		//	}
-			//while(g_i_new_data[dist_data->i_sonar_no] < 1)
+			
+			// disable hard interrupts (remember them in flag 'flags')
+			local_irq_save(flags);
+			
+			// Trigger
+			gpio_direction_output(g_i_gpio_pins[dist_data->i_sonar_no], 1);
+			sleep_until(&g_ts, g_u_i_delay);
+			gpio_direction_output(g_i_gpio_pins[dist_data->i_sonar_no], 0);
+		//	sleep_until(&g_ts, g_u_i_delay);
+			
+			gpio_direction_input(g_i_gpio_pins[dist_data->i_sonar_no]);
+			// restore hard interrupts
+			local_irq_restore(flags);
 			
 			#ifdef DEBUG
 				printk(KERN_NOTICE "evarobotSonar: NEW Data: %d\n", g_i_new_data[dist_data->i_sonar_no]);
@@ -374,9 +381,9 @@ long device_ioctl(struct file * filp, unsigned int ioctl_num, unsigned long ioct
 			
 			ret = g_i_new_data[dist_data->i_sonar_no];
 			
-
 			dist_data->i_distance = g_i_distance[dist_data->i_sonar_no];
 			g_i_new_data[dist_data->i_sonar_no] = 0;
+			
 			
 			break;
 		}
