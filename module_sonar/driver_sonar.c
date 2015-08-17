@@ -283,6 +283,15 @@ long device_ioctl(struct file * filp, unsigned int ioctl_num, unsigned long ioct
 			#ifdef DEBUG
 				printk(KERN_NOTICE "evarobotSonar: Set Param ioctl is called.\n");
 			#endif
+
+			// Clear pre interrupts
+                        for(i_free = 0; i_free < g_i_size_of_sonars; i_free++)
+                        {
+                                free_irq(irq_pins[i_free], g_c_gpio_device_desc[i_free]);
+                                gpio_free(g_i_gpio_pins[i_free]);
+
+                        }
+
 			params = (struct sonar_ioc_transfer *) ioctl_param;
 			
 			g_i_size_of_sonars = params->i_size;
@@ -291,14 +300,6 @@ long device_ioctl(struct file * filp, unsigned int ioctl_num, unsigned long ioct
 			{
 				printk(KERN_ALERT "evarobotSonar: Overloaded sensor number. ");
 				return -1;
-			}
-			
-			// Clear pre interrupts
-			for(i_free = 0; i_free < g_i_size_of_sonars; i_free++)
-			{
-				free_irq(irq_pins[i_free], g_c_gpio_device_desc[i_free]);
-				gpio_free(g_i_gpio_pins[i_free]);
-				
 			}
 			
 			// Init interrupts
