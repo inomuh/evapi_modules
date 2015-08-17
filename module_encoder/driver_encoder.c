@@ -348,7 +348,7 @@ int device_open(struct inode *inode, struct file *filp){
 /* This function reads from the device.                                     */
 /****************************************************************************/
 ssize_t device_read(struct file* filp, char* bufStoreData, size_t bufCount, loff_t* curOffset){
-	printk(KERN_INFO "evarobotEncoder: reading from device");
+//	printk(KERN_INFO "evarobotEncoder: reading from device");
 	
 	sprintf( virtual_device.data, "%li_%li", durationL, durationR);
 	ret = copy_to_user(bufStoreData, virtual_device.data, bufCount);
