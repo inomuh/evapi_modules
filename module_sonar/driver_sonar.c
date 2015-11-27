@@ -19,97 +19,66 @@ static void sleep_until(struct timespec *ts, int delay)
 static irqreturn_t r_irq_handler(int irq, void *dev_id, struct pt_regs *regs) 
 {
  
-   unsigned long flags;
-   long flight_time;
-   
-   int i_int_no;
-   int i; 
-   
-   // disable hard interrupts (remember them in flag 'flags')
-   local_irq_save(flags);
-   
-      
-   i_int_no = -1;
-      
-   
-   for(i = 0; i < g_i_size_of_sonars; i++)
-   {	   
-	   if(irq == irq_pins[i])
-	   {
-		   i_int_no = i;
-		   break;
-	   }
-	    
-   }
-   
-   #ifdef DEBUG
-		printk(KERN_NOTICE "evarobotSonar: Interrupt No: %d\n", i_int_no);
-	#endif
-   
-	if(i_int_no >= 0)
-	{
-	   pin_val[i_int_no] = gpio_get_value(g_i_gpio_pins[i_int_no]);
-	   
-	   #ifdef DEBUG
-				printk(KERN_NOTICE "evarobotSonar: pin_val: %d\n", pin_val[i_int_no]);
-			#endif	
-			
-	   if(pre_pin_val[i_int_no] == 0 && pin_val[i_int_no] == 1)
-	   {
-			// Saymaya Başla
-			//clock_gettime(CLOCK_MONOTONIC, &tstart);
-			getrawmonotonic(&tstart[i_int_no]);
-	   }
-	   else if(pre_pin_val[i_int_no] == 1 && pin_val[i_int_no] == 0)
-	   {
-			// Saymayı Durdur.
-			//clock_gettime(CLOCK_MONOTONIC, &tstop);
-			getrawmonotonic(&tstop[i_int_no]);
+	unsigned long flags;
+	long flight_time;
 
-			flight_time = tstop[i_int_no].tv_nsec - tstart[i_int_no].tv_nsec;
-			
+	// disable hard interrupts (remember them in flag 'flags')
+	local_irq_save(flags);
+	
+	g_i_distance = -1;
+		
+	if(irq == irq_pins[g_i_sonar_no])
+	{
+		pin_val = gpio_get_value(g_i_gpio_pins[g_i_sonar_no]);
+		#ifdef DEBUG
+			printk(KERN_NOTICE "evarobotSonar: pin_val: %d\n", pin_val);
+		#endif	
+
+		if(pre_pin_val == 0 && pin_val == 1)
+		{
+			// Start counting.
+			//clock_gettime(CLOCK_MONOTONIC, &tstart);
+			getrawmonotonic(&tstart);
+		}
+		else if(pre_pin_val == 1 && pin_val == 0)
+		{
+			// Stop counting.
+			//clock_gettime(CLOCK_MONOTONIC, &tstop);
+			getrawmonotonic(&tstop);
+
+			flight_time = tstop.tv_nsec - tstart.tv_nsec;
+
 			#ifdef DEBUG
 				printk(KERN_NOTICE "evarobotSonar: flight_time: %ld\n", flight_time);
 			#endif	
-			
-			g_i_distance[i_int_no] = (int)(172 * flight_time / 100000  - 309);
+
+			g_i_distance = (int)(172 * flight_time / 100000  - 309);
 
 			if(flight_time > 40000000)
 			{
-				g_i_distance[i_int_no] = 50010;
+				g_i_distance = 50010;
 			}
 
-			if(g_i_distance[i_int_no] < 0)
+			if(g_i_distance < 0)
 			{
-				g_i_distance[i_int_no] = 0;
+				g_i_distance = 0;
 			}
 
-			g_i_new_data[i_int_no] = 1;
-		
 			#ifdef DEBUG
-				printk(KERN_NOTICE "evarobotSonar: Distance[%d](10^4) %d\n", i_int_no, g_i_distance[i_int_no]);
+				printk(KERN_NOTICE "evarobotSonar: Distance[%d](10^4) %d\n", g_i_sonar_no, g_i_distance);
 			#endif
-	   }
-//	   else if(pre_pin_val[i_int_no] == 1 && pin_val[i_int_no] == 1)
-//	   {
-//			 	#ifdef DEBUG
-//					printk(KERN_NOTICE "evarobotSonar: pre & pin HIGH\n");
-//				#endif
-//			}
-		pre_pin_val[i_int_no] = pin_val[i_int_no];
+		}
+		
+		pre_pin_val = pin_val;
 	}
 	else
 	{
 		printk(KERN_ALERT "evarobotSonar: Undefined interrupt\n");
 	}
-
  
-
- 
-   // restore hard interrupts
-   local_irq_restore(flags);
- 
-   return IRQ_HANDLED;
+	// restore hard interrupts
+	local_irq_restore(flags);
+	return IRQ_HANDLED;
 }
  
  
@@ -118,13 +87,14 @@ static irqreturn_t r_irq_handler(int irq, void *dev_id, struct pt_regs *regs)
 /****************************************************************************/
 void sonar_init(void)
 {
-
+	int i;
+	for(i = 0; i < MAX_SONAR; i++)
+		g_i_gpio_pins[i] = -1;
+		
 	getrawmonotonic(&g_ts);
-
 	return;
 }
 
- 
  
 /****************************************************************************/
 /* This function releases interrupts.                                       */
@@ -132,13 +102,16 @@ void sonar_init(void)
 void r_int_release(void) 
 {
 	int i;
-	for(i = 0; i < g_i_size_of_sonars; i++)
-	{
-		free_irq(irq_pins[i], g_c_gpio_device_desc[i]);
-		gpio_free(g_i_gpio_pins[i]);
 		
-		gpio_unexport(g_i_gpio_pins[i]);
-		//gpio_unexport(g_i_gpio_reflection[i]);
+	for(i = 0; i < MAX_SONAR; i++)
+	{
+		if(g_i_gpio_pins[i] >= 0)
+		{
+			free_irq(irq_pins[i], g_c_gpio_device_desc[i]);
+			gpio_free(g_i_gpio_pins[i]);
+			
+			gpio_unexport(g_i_gpio_pins[i]);
+		}
 	}
  
     
@@ -173,8 +146,8 @@ ssize_t device_read(struct file* filp, char* bufStoreData, size_t bufCount, loff
 		printk(KERN_INFO "evarobotSonar: reading from device");
 	#endif
 	
-//	sprintf( item_type.data, "%li_%li", durationL, durationR);
-//	ret = copy_to_user(bufStoreData, item_type.data, bufCount);
+	sprintf( item_type.data, "%d", g_i_distance);
+	ret = copy_to_user(bufStoreData, item_type.data, bufCount);
 
 	return ret;
 }
@@ -185,10 +158,36 @@ ssize_t device_read(struct file* filp, char* bufStoreData, size_t bufCount, loff
 /****************************************************************************/
 ssize_t device_write(struct file* filp, const char* bufSourceData, size_t bufCount, loff_t* curOffset)
 {
+	unsigned long flags;
+	long l_sonar_no;
+	
 	#ifdef DEBUG
 		printk(KERN_INFO "evarobotSonar: writing to device");
 	#endif
-	//ret = copy_from_user(item_type.data, bufSourceData, bufCount);
+	
+	local_irq_save(flags);
+	
+	ret = copy_from_user(item_type.data, bufSourceData, bufCount);
+	
+	ret = kstrtol(item_type.data, 10, &l_sonar_no);
+	
+	g_i_sonar_no = (int)l_sonar_no;
+	
+	g_i_distance = -1;
+		
+	if(g_i_sonar_no >= MAX_SONAR)
+	{
+		return -1;
+	}
+	
+	gpio_direction_output(g_i_gpio_pins[g_i_sonar_no], 1);
+	sleep_until(&g_ts, g_u_i_delay);
+	gpio_direction_output(g_i_gpio_pins[g_i_sonar_no], 0);
+
+	gpio_direction_input(g_i_gpio_pins[g_i_sonar_no]);
+	
+	// restore hard interrupts
+	local_irq_restore(flags);
 	return ret;
 }
 
@@ -241,7 +240,6 @@ int r_init(void)
 	}
 
 	sema_init(&item_type.sem, 1);
-	g_i_size_of_sonars = 0;
 	
 	return 0;
 }
@@ -264,133 +262,75 @@ void r_cleanup(void)
 long device_ioctl(struct file * filp, unsigned int ioctl_num, unsigned long ioctl_param)
 {
 	struct sonar_ioc_transfer * params; 
-	struct sonar_data * dist_data;
-	int i;
 	char c_gpio_desc[15];
 	//int m = 0;
 	long ret;
-	int i_free;	
-	unsigned long flags;
+
 	ret = 0;
 	
 	switch(ioctl_num)
 	{
 		case IOCTL_SET_PARAM:
-		{
-
-
-			
+		{						
 			#ifdef DEBUG
 				printk(KERN_NOTICE "evarobotSonar: Set Param ioctl is called.\n");
 			#endif
-
-			// Clear pre interrupts
-                        for(i_free = 0; i_free < g_i_size_of_sonars; i_free++)
-                        {
-                                free_irq(irq_pins[i_free], g_c_gpio_device_desc[i_free]);
-                                gpio_free(g_i_gpio_pins[i_free]);
-
-                        }
-
+			
 			params = (struct sonar_ioc_transfer *) ioctl_param;
-			
-			g_i_size_of_sonars = params->i_size;
-			
-			if(g_i_size_of_sonars > MAX_SONAR)
+								
+			if(params->i_sonar_id >= MAX_SONAR)
 			{
 				printk(KERN_ALERT "evarobotSonar: Overloaded sensor number. ");
 				return -1;
 			}
 			
-			// Init interrupts
-			for(i = 0; i < g_i_size_of_sonars; i++)
+			// Clear pre interrupt
+			if(g_i_gpio_pins[params->i_sonar_id] >= 0)
 			{
-				g_i_gpio_pins[i] = params->i_gpio_pins[i];
-				
-				gpio_export(g_i_gpio_pins[i], true);
-														
-				sprintf(c_gpio_desc, "GPIO_%d_int", g_i_gpio_pins[i]);
-				sprintf(g_c_gpio_device_desc[i], "sonar%d", i);
-				
-				if (gpio_request(g_i_gpio_pins[i], c_gpio_desc)) 
-				{
-					printk("evarobotSonar GPIO request faiure: %s\n", c_gpio_desc);
-					return -1;
-				}
-				
-				if ( (irq_pins[i] = gpio_to_irq(g_i_gpio_pins[i])) < 0 ) 
- 			    {
-					printk("evarobotSonar: GPIO to IRQ mapping faiure %s\n", c_gpio_desc);
-					return -1;
-				}
-				
-				#ifdef DEBUG
-					printk(KERN_NOTICE "evarobotSonar: Mapped int %d\n", irq_pins[i]);
-				#endif
-				
-				if (request_irq(irq_pins[i],
-						   (irq_handler_t ) r_irq_handler,
-						   IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
-				   //IRQF_TRIGGER_FALLING,
-						   c_gpio_desc,
-						   g_c_gpio_device_desc[i]) ) 
-			   {
-				  printk("evarobotSonar: Irq Request failure\n");
-				  return -1;
-			   }
-				
+				free_irq(irq_pins[params->i_sonar_id], g_c_gpio_device_desc[params->i_sonar_id]);
+				gpio_free(g_i_gpio_pins[params->i_sonar_id]);
+			}	
+						
+			// Init interrupts
+			g_i_gpio_pins[params->i_sonar_id] = params->i_gpio_pin;
+			gpio_export(g_i_gpio_pins[params->i_sonar_id], true);
+			
+			sprintf(c_gpio_desc, "GPIO_%d_int", g_i_gpio_pins[params->i_sonar_id]);
+			sprintf(g_c_gpio_device_desc[params->i_sonar_id], "sonar%d", params->i_sonar_id);
+			
+			if (gpio_request(g_i_gpio_pins[params->i_sonar_id], c_gpio_desc)) 
+			{
+				printk("evarobotSonar GPIO request faiure: %s\n", c_gpio_desc);
+				return -1;
 			}
 			
-			//return g_i_size_of_sonars;
+			if ( (irq_pins[params->i_sonar_id] = gpio_to_irq(g_i_gpio_pins[params->i_sonar_id])) < 0 ) 
+			{
+				printk("evarobotSonar: GPIO to IRQ mapping faiure %s\n", c_gpio_desc);
+				return -1;
+			}
+				
+			#ifdef DEBUG
+				printk(KERN_NOTICE "evarobotSonar: Mapped int %d\n", irq_pins[params->i_sonar_id]);
+			#endif
+			
+			if (request_irq(irq_pins[params->i_sonar_id],
+											(irq_handler_t ) r_irq_handler,
+											IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
+											//IRQF_TRIGGER_FALLING,
+											c_gpio_desc,
+											g_c_gpio_device_desc[params->i_sonar_id]) ) 
+			 {
+					printk("evarobotSonar: Irq Request failure\n");
+					return -1;
+			 }			
+			
 			break;
 		}
 		
-		case IOCTL_READ_RANGE:
-		{
-			#ifdef DEBUG
-				printk(KERN_NOTICE "evarobotSonar: Read Range ioctl is called.\n");
-			#endif
-			
-			dist_data = (struct sonar_data *) ioctl_param;
-			
-			if(dist_data->i_sonar_no >= g_i_size_of_sonars)
-			{
-				printk(KERN_ALERT "evarobotSonar: Overloaded sensor number. ");
-			}
-			
-			#ifdef DEBUG
-				printk(KERN_NOTICE "evarobotSonar: Sonar NO: %d\n", dist_data->i_sonar_no);
-			#endif
-			
-			
-			// disable hard interrupts (remember them in flag 'flags')
-			local_irq_save(flags);
-			
-			// Trigger
-			gpio_direction_output(g_i_gpio_pins[dist_data->i_sonar_no], 1);
-			sleep_until(&g_ts, g_u_i_delay);
-			gpio_direction_output(g_i_gpio_pins[dist_data->i_sonar_no], 0);
-		//	sleep_until(&g_ts, g_u_i_delay);
-			
-			gpio_direction_input(g_i_gpio_pins[dist_data->i_sonar_no]);
-			// restore hard interrupts
-			local_irq_restore(flags);
-			
-			#ifdef DEBUG
-				printk(KERN_NOTICE "evarobotSonar: NEW Data: %d\n", g_i_new_data[dist_data->i_sonar_no]);
-			#endif
-			
-			ret = g_i_new_data[dist_data->i_sonar_no];
-			
-			dist_data->i_distance = g_i_distance[dist_data->i_sonar_no];
-			g_i_new_data[dist_data->i_sonar_no] = 0;
-			
-			
-			break;
-		}
 		default:
 			break;
 	}
-	
+
 	return ret;
 }

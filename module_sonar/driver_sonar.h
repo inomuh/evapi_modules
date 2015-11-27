@@ -38,14 +38,13 @@ unsigned int g_u_i_delay = 100*1000;
 
 struct sonar_ioc_transfer 
 {
-	int i_gpio_pins[MAX_SONAR];
-	int i_size; 
-
+	int i_gpio_pin;
+	int i_sonar_id;
 };
 
 struct sonar_data
 {
-	int i_sonar_no;
+	int i_sonar_id;
 	int i_distance;
 };
 
@@ -63,13 +62,12 @@ struct fake_device
 }item_type;
 
 
-int g_i_size_of_sonars = 0;
 int g_i_gpio_pins[MAX_SONAR];
 
-int g_i_distance[MAX_SONAR];
+int g_i_distance;
 char g_c_gpio_device_desc[MAX_SONAR][8];
 
-int g_i_new_data[MAX_SONAR] = {0};
+int g_i_sonar_no = 0;
 
 /****************************************************************************/
 /* Driver variables                                                         */
@@ -85,12 +83,13 @@ dev_t dev_num;
 /****************************************************************************/
 /* Sonar variables                                                        */
 /****************************************************************************/
-struct timespec tstart[MAX_SONAR];
-struct timespec tstop[MAX_SONAR];
+struct timespec tstart;
+struct timespec tstop;
+struct timespec timeout;
 struct timespec g_ts;
 
-int pin_val[MAX_SONAR] = {0};
-int pre_pin_val[MAX_SONAR] = {0};
+int pin_val = 0;
+int pre_pin_val = 0;
 
  
 /****************************************************************************/
