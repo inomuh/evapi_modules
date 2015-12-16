@@ -74,7 +74,9 @@ short int irq_pinb1    = 0;
 static irqreturn_t r_irq_handler(int irq, void *dev_id, struct pt_regs *regs) {
  
    unsigned long flags;
-   
+   int a_val;
+   int b_val;
+
    // disable hard interrupts (remember them in flag 'flags')
    local_irq_save(flags);
 
@@ -83,18 +85,20 @@ static irqreturn_t r_irq_handler(int irq, void *dev_id, struct pt_regs *regs) {
 	
 	// Read B1
 	// static inline int gpio_get_value(unsigned int gpio)
-	int b_val = gpio_get_value(GPIO_PINB0);
-	int a_val = gpio_get_value(GPIO_PINA0);
+	b_val = gpio_get_value(GPIO_PINB0);
+	a_val = gpio_get_value(GPIO_PINA0);
 
 	if((a_val == 1 && b_val == 0) || (a_val == 0 && b_val == 1))
 		directionL =  0;
 	else if((a_val == 1 && b_val == 1) || (a_val == 0 && b_val == 0))
 		directionL = 1;
+	else
+		printk(KERN_NOTICE "evarobotEncoder: Undefined b0 a0 inta0\n");
 
 	if(directionL == 0)
-		durationL++;
-	else
 		durationL--;
+	else
+		durationL++;
 
   }
   else if(irq == irq_pina1){
@@ -102,19 +106,22 @@ static irqreturn_t r_irq_handler(int irq, void *dev_id, struct pt_regs *regs) {
 
         // Read B2
         // static inline int gpio_get_value(unsigned int gpio)
-        int b_val = gpio_get_value(GPIO_PINB1);
-        int a_val = gpio_get_value(GPIO_PINA1);
+        b_val = gpio_get_value(GPIO_PINB1);
+        a_val = gpio_get_value(GPIO_PINA1);
 
         if((a_val == 1 && b_val == 0) || (a_val == 0 && b_val == 1))
                 directionR =  0;
         else if((a_val == 1 && b_val == 1) || (a_val == 0 && b_val == 0))
                 directionR = 1;
+        else
+                printk(KERN_NOTICE "evarobotEncoder: Undefined b1 a1 inta1\n");
+
 
 
         if(directionR == 1)
-                durationR++;
-        else
                 durationR--;
+        else
+                durationR++;
 
 
   }
@@ -123,19 +130,21 @@ static irqreturn_t r_irq_handler(int irq, void *dev_id, struct pt_regs *regs) {
 
         // Read B2
         // static inline int gpio_get_value(unsigned int gpio)
-        int b_val = gpio_get_value(GPIO_PINB0);
-        int a_val = gpio_get_value(GPIO_PINA0);
+        b_val = gpio_get_value(GPIO_PINB0);
+        a_val = gpio_get_value(GPIO_PINA0);
 
         if((a_val == 1 && b_val == 1) || (a_val == 0 && b_val == 0))
                 directionL =  0;
         else if((a_val == 0 && b_val == 1) || (a_val == 1 && b_val == 0))
                 directionL = 1;
+        else
+               printk(KERN_NOTICE "evarobotEncoder: Undefined b0 a0 intb0\n");
 
 
         if(directionL == 0)
-                durationL++;
-        else
                 durationL--;
+        else
+                durationL++;
 
 
   }
@@ -144,19 +153,21 @@ static irqreturn_t r_irq_handler(int irq, void *dev_id, struct pt_regs *regs) {
 
         // Read B2
         // static inline int gpio_get_value(unsigned int gpio)
-        int b_val = gpio_get_value(GPIO_PINB1);
-        int a_val = gpio_get_value(GPIO_PINA1);
+        b_val = gpio_get_value(GPIO_PINB1);
+        a_val = gpio_get_value(GPIO_PINA1);
 
         if((a_val == 1 && b_val == 1) || (a_val == 0 && b_val == 0))
                 directionR =  0;
         else if((a_val == 0 && b_val == 1) || (a_val == 1 && b_val == 0))
                 directionR = 1;
+        else
+                printk(KERN_NOTICE "evarobotEncoder: Undefined b1 a1 intb1\n");
 
 
         if(directionR == 1)
-                durationR++;
-        else
                 durationR--;
+        else
+                durationR++;
 
 
   }
@@ -348,7 +359,8 @@ int device_open(struct inode *inode, struct file *filp){
 /* This function reads from the device.                                     */
 /****************************************************************************/
 ssize_t device_read(struct file* filp, char* bufStoreData, size_t bufCount, loff_t* curOffset){
-//	printk(KERN_INFO "evarobotEncoder: reading from device");
+
+//	printk(KERN_INFO "evarobotEncoder: reading from device L: %li , R: %li \n", durationL, durationR);
 	
 	sprintf( virtual_device.data, "%li_%li", durationL, durationR);
 	ret = copy_to_user(bufStoreData, virtual_device.data, bufCount);
@@ -360,7 +372,7 @@ ssize_t device_read(struct file* filp, char* bufStoreData, size_t bufCount, loff
 /* This function writes to the device.                                      */
 /****************************************************************************/
 ssize_t device_write(struct file* filp, const char* bufSourceData, size_t bufCount, loff_t* curOffset){
-	printk(KERN_INFO "evarobotEncoder: writing to device");
+//	printk(KERN_INFO "evarobotEncoder: writing to device");
 	//ret = copy_from_user(virtual_device.data, bufSourceData, bufCount);
 	durationL = 0;
 	durationR = 0;
