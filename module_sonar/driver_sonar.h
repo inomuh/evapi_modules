@@ -16,20 +16,13 @@
 #include <linux/time.h>
 #include <linux/delay.h>
 
-//#include <linux/pthread.h>
-//#include <sys/mman.h>
-
 #define DRIVER_AUTHOR "Mehmet Akcakoca <mehmet.akcakoca@inovasyonmuhendislik.com>"
 #define DRIVER_DESC   "Evarobot Sonar Driver"
 #define DEVICE_NAME   "evarobotSonar"
 
-unsigned int g_u_i_delay = 100*1000;
+unsigned int g_u_i_delay = 50*1000;
+unsigned int g_u_i_hb_delay = 150*1000;
  
-// text below will be seen in 'cat /proc/interrupt' command
-
-// below is optional, used in more complex code, in our case, this could be
-// NULL
-
 //#ifndef DEBUG
 //#define DEBUG
 //#endif
@@ -64,11 +57,11 @@ struct fake_device
 
 int g_i_gpio_pins[MAX_SONAR];
 
-int g_i_distance;
+int g_i_distance[MAX_SONAR];
 char g_c_gpio_device_desc[MAX_SONAR][8];
 
 int g_i_sonar_no = 0;
-
+int g_i_hb_is_ok[MAX_SONAR];
 /****************************************************************************/
 /* Driver variables                                                         */
 /****************************************************************************/
@@ -83,13 +76,13 @@ dev_t dev_num;
 /****************************************************************************/
 /* Sonar variables                                                        */
 /****************************************************************************/
-struct timespec tstart;
-struct timespec tstop;
+struct timespec tstart[MAX_SONAR];
+struct timespec tstop[MAX_SONAR];
 struct timespec timeout;
 struct timespec g_ts;
 
-int pin_val = 0;
-int pre_pin_val = 0;
+int pin_val[MAX_SONAR];
+int pre_pin_val[MAX_SONAR];
 
  
 /****************************************************************************/

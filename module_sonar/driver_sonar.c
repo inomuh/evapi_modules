@@ -21,55 +21,72 @@ static irqreturn_t r_irq_handler(int irq, void *dev_id, struct pt_regs *regs)
  
 	unsigned long flags;
 	long flight_time;
+	int i_sonar_no;
+	int i_defined_int = 0;
 
 	// disable hard interrupts (remember them in flag 'flags')
 	local_irq_save(flags);
 	
-	g_i_distance = -1;
-		
-	if(irq == irq_pins[g_i_sonar_no])
+//	g_i_distance = -1;
+	for(i_sonar_no = 0; i_sonar_no < MAX_SONAR; i_sonar_no++)
 	{
-		pin_val = gpio_get_value(g_i_gpio_pins[g_i_sonar_no]);
+		if(irq == irq_pins[i_sonar_no])
+		{
+			i_defined_int = 1;
+			break;
+		}
+	}
+		
+	if(i_defined_int == 1)
+	{
+		pin_val[i_sonar_no] = gpio_get_value(g_i_gpio_pins[i_sonar_no]);
 		#ifdef DEBUG
-			printk(KERN_NOTICE "evarobotSonar: pin_val: %d\n", pin_val);
+			printk(KERN_NOTICE "evarobotSonar: pin_val: %d\n", pin_val[i_sonar_no]);
 		#endif	
 
-		if(pre_pin_val == 0 && pin_val == 1)
+		if(pre_pin_val[i_sonar_no] == 0 && pin_val[i_sonar_no] == 1)
 		{
 			// Start counting.
 			//clock_gettime(CLOCK_MONOTONIC, &tstart);
-			getrawmonotonic(&tstart);
+			getrawmonotonic(&tstart[i_sonar_no]);
 		}
-		else if(pre_pin_val == 1 && pin_val == 0)
+		else if(pre_pin_val[i_sonar_no] == 1 && pin_val[i_sonar_no] == 0)
 		{
 			// Stop counting.
 			//clock_gettime(CLOCK_MONOTONIC, &tstop);
-			getrawmonotonic(&tstop);
+			getrawmonotonic(&tstop[i_sonar_no]);
 
-			flight_time = tstop.tv_nsec - tstart.tv_nsec;
+			flight_time = tstop[i_sonar_no].tv_nsec - tstart[i_sonar_no].tv_nsec;
 
 			#ifdef DEBUG
-				printk(KERN_NOTICE "evarobotSonar: flight_time: %ld\n", flight_time);
+				printk(KERN_NOTICE "evarobotSonar: flight_time[%d]: %ld\n", i_sonar_no, flight_time);
+				printk(KERN_NOTICE "evarobotSonar: : g_i_hb_is_ok[%d]: %d\n", i_sonar_no, g_i_hb_is_ok[i_sonar_no]);
+
 			#endif	
+			//sleep_until(&g_ts, 5000000);
+			g_i_distance[i_sonar_no] = (int)(172 * flight_time / 100000  - 309);
 
-			g_i_distance = (int)(172 * flight_time / 100000  - 309);
-
+			if(g_i_hb_is_ok[i_sonar_no] < 0 && flight_time > 150000)
+			{
+				g_i_hb_is_ok[i_sonar_no] = 1;
+			}
+			
 			if(flight_time > 40000000)
 			{
-				g_i_distance = 50010;
+				g_i_distance[i_sonar_no] = 50010;
 			}
 
-			if(g_i_distance < 0)
+			if(g_i_distance[i_sonar_no] < 0)
 			{
-				g_i_distance = 0;
+				g_i_distance[i_sonar_no] = 0;
 			}
 
 			#ifdef DEBUG
-				printk(KERN_NOTICE "evarobotSonar: Distance[%d](10^4) %d\n", g_i_sonar_no, g_i_distance);
+				printk(KERN_NOTICE "evarobotSonar: Distance[%d](10^4) %d\n", i_sonar_no, g_i_distance[i_sonar_no]);
 			#endif
 		}
 		
-		pre_pin_val = pin_val;
+		pre_pin_val[i_sonar_no] = pin_val[i_sonar_no];
 	}
 	else
 	{
@@ -89,8 +106,13 @@ void sonar_init(void)
 {
 	int i;
 	for(i = 0; i < MAX_SONAR; i++)
+	{
 		g_i_gpio_pins[i] = -1;
-		
+		g_i_distance[i] = -1;
+		g_i_hb_is_ok[i] = 0;
+		pin_val[i] = 0;
+		pre_pin_val[i] = 0;
+	}	
 	getrawmonotonic(&g_ts);
 	return;
 }
@@ -142,13 +164,35 @@ int device_open(struct inode *inode, struct file *filp)
 /****************************************************************************/
 ssize_t device_read(struct file* filp, char* bufStoreData, size_t bufCount, loff_t* curOffset)
 {
+	long l_sonar_no;
+	int i_sonar_no;
+
 	#ifdef DEBUG
 		printk(KERN_INFO "evarobotSonar: reading from device");
 	#endif
-	
-	sprintf( item_type.data, "%d", g_i_distance);
-	ret = copy_to_user(bufStoreData, item_type.data, bufCount);
 
+        ret = copy_from_user(item_type.data, bufStoreData, bufCount);
+
+        ret = kstrtol(item_type.data, 10, &l_sonar_no);
+	i_sonar_no = (int)l_sonar_no;
+	
+        if(i_sonar_no >= MAX_SONAR || i_sonar_no < 0)
+        {
+	        return -1;
+        }
+
+	if(g_i_hb_is_ok[i_sonar_no] != 0)
+	{
+	        sprintf( item_type.data, "%d", g_i_hb_is_ok[i_sonar_no]);
+	        ret = copy_to_user(bufStoreData, item_type.data, bufCount);
+		if(g_i_hb_is_ok[i_sonar_no] == 1)
+			g_i_hb_is_ok[i_sonar_no] = 0;
+	}
+	else
+	{
+		sprintf( item_type.data, "%d", g_i_distance[i_sonar_no]);
+		ret = copy_to_user(bufStoreData, item_type.data, bufCount);
+	}
 	return ret;
 }
 
@@ -171,21 +215,43 @@ ssize_t device_write(struct file* filp, const char* bufSourceData, size_t bufCou
 	
 	ret = kstrtol(item_type.data, 10, &l_sonar_no);
 	
-	g_i_sonar_no = (int)l_sonar_no;
-	
-	g_i_distance = -1;
-		
-	if(g_i_sonar_no >= MAX_SONAR)
-	{
-		return -1;
-	}
-	
-	gpio_direction_output(g_i_gpio_pins[g_i_sonar_no], 1);
-	sleep_until(&g_ts, g_u_i_delay);
-	gpio_direction_output(g_i_gpio_pins[g_i_sonar_no], 0);
 
-	gpio_direction_input(g_i_gpio_pins[g_i_sonar_no]);
-	
+	if(l_sonar_no >= 100)
+	{
+		g_i_sonar_no = (int)l_sonar_no%100;
+		g_i_hb_is_ok[g_i_sonar_no] = -1;
+		if(g_i_sonar_no >= MAX_SONAR)
+	        {
+        	        return -1;
+        	}
+
+	        gpio_direction_output(g_i_gpio_pins[g_i_sonar_no], 1);
+       	 	sleep_until(&g_ts, g_u_i_hb_delay);
+	     	gpio_direction_output(g_i_gpio_pins[g_i_sonar_no], 0);
+
+		//ndelay(50000);
+	        gpio_direction_input(g_i_gpio_pins[g_i_sonar_no]);
+	}
+	else
+	{
+		g_i_sonar_no = (int)l_sonar_no;
+		g_i_hb_is_ok[g_i_sonar_no] = 0;
+		if(g_i_sonar_no >= MAX_SONAR)
+        	{
+                	return -1;
+        	}
+	        gpio_direction_output(g_i_gpio_pins[g_i_sonar_no], 1);
+        	sleep_until(&g_ts, g_u_i_delay);
+	        gpio_direction_output(g_i_gpio_pins[g_i_sonar_no], 0);
+
+		//ndelay(50000);
+	        gpio_direction_input(g_i_gpio_pins[g_i_sonar_no]);
+
+
+	}
+
+	g_i_distance[g_i_sonar_no] = -1;
+
 	// restore hard interrupts
 	local_irq_restore(flags);
 	return ret;
@@ -263,7 +329,6 @@ long device_ioctl(struct file * filp, unsigned int ioctl_num, unsigned long ioct
 {
 	struct sonar_ioc_transfer * params; 
 	char c_gpio_desc[15];
-	//int m = 0;
 	long ret;
 
 	ret = 0;
