@@ -6,6 +6,10 @@ Linux kernel versiyonunuzu öğrenin
 Aşağıdaki linkten uygun kernel vesiyonunu indirin
 
 	> rpi-update
+
+Kaynak kodu çekmek için rpi-source komutu indirilir ve kullanılır.
+	
+	> sudo wget https://raw.githubusercontent.com/notro/rpi-source/master/rpi-source -O /usr/bin/rpi-source && sudo chmod +x /usr/bin/rpi-source && /usr/bin/rpi-source -q --tag-update
 	> rpi-source --skip-gcc
 
 Oluşturulacak driver'ların konulacağı klasör oluşturulur.
