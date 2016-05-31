@@ -57,7 +57,7 @@ struct fake_device
 
 int g_i_gpio_pins[MAX_SONAR];
 
-int g_i_distance[MAX_SONAR];
+long g_i_distance[MAX_SONAR];
 char g_c_gpio_device_desc[MAX_SONAR][8];
 
 int g_i_sonar_no = 0;

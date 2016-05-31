@@ -1,5 +1,5 @@
 #include "driver_sonar.h"
-
+#include <linux/math64.h>
 
 static void sleep_until(struct timespec *ts, int delay)
 {
@@ -23,6 +23,9 @@ static irqreturn_t r_irq_handler(int irq, void *dev_id, struct pt_regs *regs)
 	long flight_time;
 	int i_sonar_no;
 	int i_defined_int = 0;
+	long dummy1 = 0;
+	long  dummy2 = 0;
+	long dummy3 = 0;
 
 	// disable hard interrupts (remember them in flag 'flags')
 	local_irq_save(flags);
@@ -64,25 +67,31 @@ static irqreturn_t r_irq_handler(int irq, void *dev_id, struct pt_regs *regs)
 
 			#endif	
 			//sleep_until(&g_ts, 5000000);
-			g_i_distance[i_sonar_no] = (int)(172 * flight_time / 100000  - 309);
+
+			dummy1 = div64_long(flight_time,100000);
+			dummy2 = 172 * dummy1;
+			dummy3 = dummy2 - 309;
+			g_i_distance[i_sonar_no] = dummy3; //(long)(172 * flight_time / 100000  - 309);
 
 			if(g_i_hb_is_ok[i_sonar_no] < 0 && flight_time > 150000)
 			{
 				g_i_hb_is_ok[i_sonar_no] = 1;
 			}
 			
-			if(flight_time > 40000000)
+			if(flight_time > 30000000)
 			{
-				g_i_distance[i_sonar_no] = 50010;
+				g_i_distance[i_sonar_no] = 50000;
+				printk(KERN_NOTICE "evarobotSonar: Max. Distance \n");
 			}
 
 			if(g_i_distance[i_sonar_no] < 0)
 			{
+//				printk(KERN_NOTICE "evarobotSonar: Negative Distance [%d](10^4) %ld\n", i_sonar_no, g_i_distance[i_sonar_no]);
 				g_i_distance[i_sonar_no] = 0;
 			}
 
 			#ifdef DEBUG
-				printk(KERN_NOTICE "evarobotSonar: Distance[%d](10^4) %d\n", i_sonar_no, g_i_distance[i_sonar_no]);
+				printk(KERN_NOTICE "evarobotSonar: Distance[%d](10^4) %ld\n", i_sonar_no, g_i_distance[i_sonar_no]);
 			#endif
 		}
 		
@@ -190,7 +199,7 @@ ssize_t device_read(struct file* filp, char* bufStoreData, size_t bufCount, loff
 	}
 	else
 	{
-		sprintf( item_type.data, "%d", g_i_distance[i_sonar_no]);
+		sprintf( item_type.data, "%ld", g_i_distance[i_sonar_no]);
 		ret = copy_to_user(bufStoreData, item_type.data, bufCount);
 	}
 	return ret;
